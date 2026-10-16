@@ -65,7 +65,7 @@ When a `Result` is `Err`, `Map`, `AndThen`, `AndTee`, `AndThrough`, and `MapErr`
 
 ## Example: order placement
 
-[`examples/order`](examples/order) is a runnable, business-style flow: parse and validate a request, look up a customer, reserve stock (with `OrElse` backorder recovery when the catalog allows it), then branch inside `AndThen` for **member vs guest** pricing, a standard credit check (`AndThrough`), and an extra **manual approval** sub-pipeline only when the total exceeds a threshold. Member pricing also uses `OrElse` when the discount service is down. The flow persists the order and emits an audit event (`AndTee`). Domain errors use `errors.Is` / `errors.As`; the handler boundary uses `Match` to build an HTTP-like response.
+[`examples/order`](examples/order) is a runnable, business-style flow: parse and validate a request, look up a customer, reserve stock (with `OrElse` backorder recovery when the catalog allows it), then branch inside `AndThen` for **member vs guest** pricing, a standard credit check (`AndThrough`), and an extra **manual approval** sub-pipeline only when the total exceeds a threshold. Member pricing also uses `OrElse` when the discount service is down. **Payment** branches on error kind: `ErrPaymentTimeout` retries or falls back to a secondary gateway (`OrElse`, then the chain continues), `ErrCardDeclined` notifies and stops, and a post-payment inventory commit failure triggers a **refund** compensating action before returning the stock error. The flow persists the order and emits an audit event (`AndTee`). Domain errors use `errors.Is` / `errors.As`; the handler boundary uses `Match` to build an HTTP-like response.
 
 ```bash
 go run ./examples/order/demo/

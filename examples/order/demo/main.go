@@ -33,10 +33,14 @@ func demoService() *order.Service {
 		Inventory: demoInventory{},
 		Catalog:   demoCatalog{},
 		Discounts: demoDiscounts{},
-		Credit:    demoCredit{},
-		Approvals: demoApprovals{},
-		Orders:    demoOrders{},
-		Audit:     demoAudit{},
+		Credit:            demoCredit{},
+		Approvals:         demoApprovals{},
+		Payments:          demoPayments{},
+		SecondaryPayments: demoSecondaryPayments{},
+		Refunds:           demoRefunds{},
+		Notify:            demoNotifier{},
+		Orders:            demoOrders{},
+		Audit:             demoAudit{},
 	}
 }
 
@@ -61,6 +65,15 @@ func (demoInventory) UnitPriceCents(sku string) (int, error) {
 		return 1250, nil
 	default:
 		return 0, &order.NotFoundError{Entity: "sku", ID: sku}
+	}
+}
+
+func (demoInventory) CommitReservation(sku string, qty int) error {
+	switch sku {
+	case "sku-widget", "sku-backorder":
+		return nil
+	default:
+		return &order.NotFoundError{Entity: "sku", ID: sku}
 	}
 }
 
@@ -104,6 +117,28 @@ type demoApprovals struct{}
 func (demoApprovals) ApproveHighValue(c order.Customer, amount int) error {
 	fmt.Printf("  approval: %s high-value order %d cents\n", c.ID, amount)
 	return nil
+}
+
+type demoPayments struct{}
+
+func (demoPayments) Charge(po order.PricedOrder) (order.PaymentAuthorization, error) {
+	return order.PaymentAuthorization{ID: "pay-primary", Gateway: "primary"}, nil
+}
+
+type demoSecondaryPayments struct{}
+
+func (demoSecondaryPayments) Charge(order.PricedOrder) (order.PaymentAuthorization, error) {
+	return order.PaymentAuthorization{ID: "pay-secondary", Gateway: "secondary"}, nil
+}
+
+type demoRefunds struct{}
+
+func (demoRefunds) Refund(string, int) error { return nil }
+
+type demoNotifier struct{}
+
+func (demoNotifier) OrderFailed(customerID string, cause error) {
+	fmt.Printf("  notify: order failed for %s: %v\n", customerID, cause)
 }
 
 type demoOrders struct{}

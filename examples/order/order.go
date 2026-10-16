@@ -94,6 +94,7 @@ type CustomerRepository interface {
 type InventoryService interface {
 	UnitPriceCents(sku string) (int, error)
 	Available(sku string) (int, error)
+	CommitReservation(sku string, quantity int) error
 }
 
 // ProductCatalog describes product-specific fulfillment rules.
@@ -128,14 +129,18 @@ type Auditor interface {
 
 // Service wires dependencies for the placement pipeline.
 type Service struct {
-	Customers CustomerRepository
-	Inventory InventoryService
-	Catalog   ProductCatalog
-	Discounts DiscountService
-	Credit    CreditChecker
-	Approvals ApprovalService
-	Orders    OrderStore
-	Audit     Auditor
+	Customers         CustomerRepository
+	Inventory         InventoryService
+	Catalog           ProductCatalog
+	Discounts         DiscountService
+	Credit            CreditChecker
+	Approvals         ApprovalService
+	Payments          PaymentGateway
+	SecondaryPayments PaymentGateway
+	Refunds           Refunder
+	Notify            Notifier
+	Orders            OrderStore
+	Audit             Auditor
 }
 
 // Handle runs the full placement flow and maps to an HTTP-like response.
@@ -183,8 +188,14 @@ func (s *Service) place(raw RawRequest) result.Result[PlacedOrder] {
 		AndThen(func(po PricedOrder) result.Result[PricedOrder] {
 			return branchApproval(s, po)
 		}).
-		AndThen(func(po PricedOrder) result.Result[PlacedOrder] {
-			return persistOrder(s.Orders, po)
+		AndThen(func(po PricedOrder) result.Result[PaidOrder] {
+			return s.chargePrimary(po).OrElse(s.recoverPayment(po))
+		}).
+		AndThen(func(paid PaidOrder) result.Result[PaidOrder] {
+			return commitReservation(s.Inventory, s.Refunds, paid)
+		}).
+		AndThen(func(paid PaidOrder) result.Result[PlacedOrder] {
+			return persistOrder(s.Orders, paid)
 		}).
 		AndTee(func(o PlacedOrder) {
 			if s.Audit != nil {
@@ -358,7 +369,8 @@ func authorizeCredit(checker CreditChecker, po PricedOrder) result.Result[struct
 	return result.Ok(struct{}{})
 }
 
-func persistOrder(store OrderStore, po PricedOrder) result.Result[PlacedOrder] {
+func persistOrder(store OrderStore, paid PaidOrder) result.Result[PlacedOrder] {
+	po := paid.Priced
 	req := po.Stocked.CustomerOrder.Request
 	order := PlacedOrder{
 		ID:         fmt.Sprintf("ord-%s-%s", req.CustomerID, req.SKU),
@@ -396,6 +408,10 @@ func mapErrorToHTTP(err error) HTTPResponse {
 	var stock *StockError
 	if errors.As(err, &stock) {
 		return HTTPResponse{StatusCode: 409, Body: stock.Error()}
+	}
+
+	if errors.Is(err, ErrCardDeclined) {
+		return HTTPResponse{StatusCode: 402, Body: err.Error()}
 	}
 
 	var payment *PaymentError

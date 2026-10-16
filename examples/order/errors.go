@@ -9,6 +9,8 @@ var (
 	ErrInvalidInput          = errors.New("invalid input")
 	ErrDiscountUnavailable   = errors.New("discount service unavailable")
 	ErrInsufficientInventory = errors.New("insufficient inventory")
+	ErrPaymentTimeout        = errors.New("payment gateway timeout")
+	ErrCardDeclined          = errors.New("card declined")
 )
 
 // ValidationError marks client mistakes (bad field values).
