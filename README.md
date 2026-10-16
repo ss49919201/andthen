@@ -67,17 +67,8 @@ value, err := r.Get()
 
 When a `Result` is `Err`, `Map`, `AndThen`, `AndTee`, `AndThrough`, and `MapErr` short-circuit (they do not run your callback). `OrElse` is the recovery path on `Err`.
 
-## Example: order placement
-
-[`examples/order`](examples/order) is a runnable, business-style flow: parse and validate a request, look up a customer, reserve stock (with `OrElse` backorder recovery when the catalog allows it), then branch inside `AndThen` for **member vs guest** pricing, a standard credit check (`AndThrough`), and an extra **manual approval** sub-pipeline only when the total exceeds a threshold. Member pricing also uses `OrElse` when the discount service is down. **Payment** branches on error kind: `ErrPaymentTimeout` retries or falls back to a secondary gateway (`OrElse`, then the chain continues), `ErrCardDeclined` notifies and stops, and a post-payment inventory commit failure triggers a **refund** compensating action before returning the stock error. The flow persists the order and emits an audit event (`AndTee`). Domain errors use `errors.Is` / `errors.As`; the handler boundary uses `Match` to build an HTTP-like response.
-
-```bash
-go run ./examples/order/demo/
-go test ./examples/order/...
-```
+Package examples (verified by `go test`) live in `result/example_test.go` and appear on [pkg.go.dev](https://pkg.go.dev/github.com/ss49919201/andthen/result).
 
 ## Inspired by neverthrow
 
 The chaining model and naming follow [neverthrow](https://github.com/supermacro/neverthrow) (TypeScript). This package adapts that style to Go’s `(T, error)` idiom with generic methods on `Result[T]`.
-
-An `option` package is planned for a later release.
