@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="andthen" width="480" />
+</p>
+
 # andthen
 
 A small Go library of [neverthrow](https://github.com/supermacro/neverthrow)-style `Result` types, using Go generics for fluent error handling without nested `if err != nil` checks.
