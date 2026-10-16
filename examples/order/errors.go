@@ -42,6 +42,15 @@ func (e *StockError) Error() string {
 	return fmt.Sprintf("sku %s: requested %d, available %d", e.SKU, e.Requested, e.Available)
 }
 
+// ApprovalError means a high-value order was not approved.
+type ApprovalError struct {
+	Reason string
+}
+
+func (e *ApprovalError) Error() string {
+	return e.Reason
+}
+
 // PaymentError means the buyer cannot cover the order total.
 type PaymentError struct {
 	CustomerID string

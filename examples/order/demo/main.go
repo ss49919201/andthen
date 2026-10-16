@@ -13,9 +13,12 @@ func main() {
 		name string
 		req  order.RawRequest
 	}{
-		{name: "happy path", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "2"}},
+		{name: "member happy path", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "2"}},
+		{name: "guest checkout", req: order.RawRequest{CustomerID: "guest-1", SKU: "sku-widget", Quantity: "2"}},
+		{name: "large order approval", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "4"}},
+		{name: "backorder sku", req: order.RawRequest{CustomerID: "c1", SKU: "sku-backorder", Quantity: "1"}},
 		{name: "bad quantity", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "nope"}},
-		{name: "out of stock", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "99"}},
+		{name: "out of stock (no backorder)", req: order.RawRequest{CustomerID: "c1", SKU: "sku-widget", Quantity: "99"}},
 	}
 
 	for _, sc := range scenarios {
@@ -28,8 +31,10 @@ func demoService() *order.Service {
 	return &order.Service{
 		Customers: demoCustomers{},
 		Inventory: demoInventory{},
+		Catalog:   demoCatalog{},
 		Discounts: demoDiscounts{},
 		Credit:    demoCredit{},
+		Approvals: demoApprovals{},
 		Orders:    demoOrders{},
 		Audit:     demoAudit{},
 	}
@@ -38,26 +43,42 @@ func demoService() *order.Service {
 type demoCustomers struct{}
 
 func (demoCustomers) FindByID(id string) (order.Customer, error) {
-	if id != "c1" {
+	switch id {
+	case "c1":
+		return order.Customer{ID: "c1", Kind: "member", Tier: "gold", CreditLimit: 100_000, BalanceCents: 0}, nil
+	case "guest-1":
+		return order.Customer{ID: "guest-1", Kind: "guest", CreditLimit: 100_000, BalanceCents: 0}, nil
+	default:
 		return order.Customer{}, &order.NotFoundError{Entity: "customer", ID: id}
 	}
-	return order.Customer{ID: "c1", Tier: "gold", CreditLimit: 100_000, BalanceCents: 0}, nil
 }
 
 type demoInventory struct{}
 
 func (demoInventory) UnitPriceCents(sku string) (int, error) {
-	if sku != "sku-widget" {
+	switch sku {
+	case "sku-widget", "sku-backorder":
+		return 1250, nil
+	default:
 		return 0, &order.NotFoundError{Entity: "sku", ID: sku}
 	}
-	return 1250, nil
 }
 
 func (demoInventory) Available(sku string) (int, error) {
-	if sku != "sku-widget" {
+	switch sku {
+	case "sku-widget":
+		return 12, nil
+	case "sku-backorder":
+		return 0, nil
+	default:
 		return 0, &order.NotFoundError{Entity: "sku", ID: sku}
 	}
-	return 12, nil
+}
+
+type demoCatalog struct{}
+
+func (demoCatalog) AllowsBackorder(sku string) bool {
+	return sku == "sku-backorder"
 }
 
 type demoDiscounts struct{}
@@ -75,6 +96,13 @@ func (demoCredit) Authorize(c order.Customer, amount int) error {
 	if c.BalanceCents+amount > c.CreditLimit {
 		return &order.PaymentError{CustomerID: c.ID, Reason: "over limit"}
 	}
+	return nil
+}
+
+type demoApprovals struct{}
+
+func (demoApprovals) ApproveHighValue(c order.Customer, amount int) error {
+	fmt.Printf("  approval: %s high-value order %d cents\n", c.ID, amount)
 	return nil
 }
 
