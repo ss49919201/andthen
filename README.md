@@ -63,6 +63,15 @@ value, err := r.Get()
 
 When a `Result` is `Err`, `Map`, `AndThen`, `AndTee`, `AndThrough`, and `MapErr` short-circuit (they do not run your callback). `OrElse` is the recovery path on `Err`.
 
+## Example: order placement
+
+[`examples/order`](examples/order) is a runnable, business-style flow: parse and validate a request, look up a customer, reserve stock, price with a discount (`OrElse` when the discount service is down), run a credit check (`AndThrough`), persist the order, and emit an audit event (`AndTee`). Domain errors use `errors.Is` / `errors.As`; the handler boundary uses `Match` to build an HTTP-like response.
+
+```bash
+go run ./examples/order/demo/
+go test ./examples/order/...
+```
+
 ## Inspired by neverthrow
 
 The chaining model and naming follow [neverthrow](https://github.com/supermacro/neverthrow) (TypeScript). This package adapts that style to Go’s `(T, error)` idiom with generic methods on `Result[T]`.
